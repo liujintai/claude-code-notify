@@ -36,13 +36,13 @@ Claude Code 智能通知工具 —— 当 AI 完成回复时，自动推送桌�
 ### 方式一：一键安装（推荐）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB/claude-code-notify/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/liujintai/claude-code-notify/main/install.sh | bash
 ```
 
 ### 方式二：克隆仓库安装
 
 ```bash
-git clone https://github.com/YOUR_GITHUB/claude-code-notify.git
+git clone https://github.com/liujintai/claude-code-notify.git
 cd claude-code-notify
 bash install.sh
 ```
@@ -133,7 +133,7 @@ Claude Code 回复结束
 
 ```bash
 # 方式一：使用卸载脚本
-curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB/claude-code-notify/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/liujintai/claude-code-notify/main/uninstall.sh | bash
 
 # 方式二：手动卸载
 rm -rf ~/.claude/claude-notify

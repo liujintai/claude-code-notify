@@ -8,7 +8,7 @@ set -euo pipefail
 
 INSTALL_DIR="$HOME/.claude/claude-notify"
 SETTINGS_FILE="$HOME/.claude/settings.json"
-REPO_URL="https://raw.githubusercontent.com/YOUR_GITHUB/claude-code-notify/main"
+REPO_URL="https://raw.githubusercontent.com/liujintai/claude-code-notify/main"
 
 # 颜色输出
 RED='\033[0;31m'

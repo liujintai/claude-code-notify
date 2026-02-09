@@ -213,21 +213,49 @@ def summarize_with_haiku(user_text: str, assistant_text: str) -> str:
 # ============================================================
 # 主入口
 # ============================================================
+def _do_notify(user_text: str, assistant_text: str):
+    """生成摘要并发送通知"""
+    if assistant_text:
+        summary = summarize_with_haiku(user_text, assistant_text)
+    else:
+        summary = "任务已完成"
+    send_notification("Claude Code", summary)
+
+
 def main():
+    # 1. 读取 stdin（必须在 fork 之前，因为 stdin 是管道输入）
     try:
         raw = sys.stdin.read()
         hook_input = json.loads(raw) if raw.strip() else {}
     except Exception:
         hook_input = {}
 
+    # 2. 提取对话（快速本地文件操作）
     user_text, assistant_text = extract_conversation(hook_input)
 
-    if assistant_text:
-        summary = summarize_with_haiku(user_text, assistant_text)
-    else:
-        summary = "任务已完成"
+    # 3. Fork 子进程异步处理耗时的 API 调用和通知
+    try:
+        pid = os.fork()
+    except OSError:
+        # fork 失败，回退到同步模式
+        _do_notify(user_text, assistant_text)
+        return
 
-    send_notification("Claude Code", summary)
+    if pid > 0:
+        # 父进程立即退出，让 Claude Code 继续
+        os._exit(0)
+
+    # --- 子进程：后台执行 ---
+    # 创建新会话，彻底脱离父进程
+    os.setsid()
+    # 重定向标准流到 /dev/null，避免干扰
+    devnull = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull, 0)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+
+    _do_notify(user_text, assistant_text)
 
 
 if __name__ == "__main__":

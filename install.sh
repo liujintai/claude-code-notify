@@ -6,7 +6,7 @@ set -euo pipefail
 # 为 Claude Code 添加智能通知功能
 # ============================================================
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 INSTALL_DIR="$HOME/.claude/claude-notify"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 REPO_URL="https://raw.githubusercontent.com/liujintai/claude-code-notify/main"

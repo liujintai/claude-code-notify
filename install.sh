@@ -6,9 +6,11 @@ set -euo pipefail
 # 为 Claude Code 添加智能通知功能
 # ============================================================
 
+VERSION="1.1.0"
 INSTALL_DIR="$HOME/.claude/claude-notify"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 REPO_URL="https://raw.githubusercontent.com/liujintai/claude-code-notify/main"
+VERSION_FILE="$INSTALL_DIR/.version"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -21,6 +23,45 @@ info()  { echo -e "${BLUE}[INFO]${NC} $1"; }
 ok()    { echo -e "${GREEN}[OK]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# ============================================================
+# 0. 检测已安装版本
+# ============================================================
+if [[ -f "$VERSION_FILE" ]]; then
+    INSTALLED_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
+    if [[ "$INSTALLED_VERSION" == "$VERSION" ]]; then
+        echo ""
+        echo -e "${GREEN}Claude Code Notify v${VERSION} 已安装，无需更新。${NC}"
+        echo ""
+        echo "  安装位置: $INSTALL_DIR/"
+        echo "  配置文件: $SETTINGS_FILE"
+        echo ""
+        read -rp "是否强制重新安装？[y/N] " choice
+        case "$choice" in
+            y|Y) info "开始重新安装..." ;;
+            *)   echo "已取消。"; exit 0 ;;
+        esac
+    else
+        echo ""
+        echo -e "${YELLOW}检测到旧版本 v${INSTALLED_VERSION}，当前最新 v${VERSION}${NC}"
+        echo ""
+        read -rp "是否升级？[Y/n] " choice
+        case "$choice" in
+            n|N) echo "已取消。"; exit 0 ;;
+            *)   info "开始升级 v${INSTALLED_VERSION} → v${VERSION}..." ;;
+        esac
+    fi
+elif [[ -f "$INSTALL_DIR/notify.py" ]]; then
+    # 旧版安装（没有版本文件）
+    echo ""
+    echo -e "${YELLOW}检测到已有安装（版本未知），当前最新 v${VERSION}${NC}"
+    echo ""
+    read -rp "是否覆盖升级？[Y/n] " choice
+    case "$choice" in
+        n|N) echo "已取消。"; exit 0 ;;
+        *)   info "开始升级..." ;;
+    esac
+fi
 
 # ============================================================
 # 1. 环境检查
@@ -156,6 +197,9 @@ cp "$SRC_DIR/notify.py" "$INSTALL_DIR/notify.py"
 cp "$SRC_DIR/cc.jpg" "$INSTALL_DIR/cc.jpg"
 chmod +x "$INSTALL_DIR/notify.py"
 
+# 写入版本文件
+echo "$VERSION" > "$VERSION_FILE"
+
 ok "文件安装完成 → $INSTALL_DIR/"
 
 # ============================================================
@@ -165,21 +209,24 @@ info "配置 Claude Code hooks..."
 
 HOOK_CMD='python3 $HOME/.claude/claude-notify/notify.py'
 
-if [[ -f "$SETTINGS_FILE" ]]; then
-    # 检查是否已有 hooks 配置
-    if python3 -c "
+# 检查 settings.json 中是否已有 notify.py 相关的 hook
+_hook_exists() {
+    [[ -f "$SETTINGS_FILE" ]] && python3 -c "
 import json, sys
 with open('$SETTINGS_FILE') as f:
     cfg = json.load(f)
-hooks = cfg.get('hooks', {}).get('Stop', [])
-for h in hooks:
+for h in cfg.get('hooks', {}).get('Stop', []):
     for hh in h.get('hooks', []):
-        if 'claude-notify' in hh.get('command', ''):
+        if 'notify.py' in hh.get('command', ''):
             sys.exit(0)
 sys.exit(1)
-" 2>/dev/null; then
-        ok "hooks 已存在，跳过配置"
-    else
+" 2>/dev/null
+}
+
+if _hook_exists; then
+    ok "hooks 已存在，跳过配置"
+else
+    if [[ -f "$SETTINGS_FILE" ]]; then
         # 合并 hooks 到已有配置
         python3 -c "
 import json
@@ -197,10 +244,9 @@ with open('$SETTINGS_FILE', 'w') as f:
     json.dump(cfg, f, indent=2, ensure_ascii=False)
 "
         ok "hooks 已写入 $SETTINGS_FILE"
-    fi
-else
-    # 创建新的 settings.json
-    python3 -c "
+    else
+        # 创建新的 settings.json
+        python3 -c "
 import json
 cfg = {
     'hooks': {
@@ -215,7 +261,8 @@ cfg = {
 with open('$SETTINGS_FILE', 'w') as f:
     json.dump(cfg, f, indent=2, ensure_ascii=False)
 "
-    ok "已创建 $SETTINGS_FILE"
+        ok "已创建 $SETTINGS_FILE"
+    fi
 fi
 
 # ============================================================
@@ -236,7 +283,7 @@ kill $NOTIFY_PID 2>/dev/null || true
 # ============================================================
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  Claude Code Notify 安装完成！${NC}"
+echo -e "${GREEN}  Claude Code Notify v${VERSION} 安装完成！${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "  安装位置: $INSTALL_DIR/"

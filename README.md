@@ -15,14 +15,13 @@ Claude Code 智能通知工具 —— 当 AI 完成回复时，自动推送桌�
 
 ## 效果预览
 
-当 Claude Code 完成一次回复后，你会收到类似这样的通知：
+当 Claude Code 完成任务后，你会收到类似这样的通知：
 
-```
-┌─────────────────────────────┐
-│ 🟠 Claude Code              │
-│ 代码编写完成                 │
-└─────────────────────────────┘
-```
+![img_1.png](img_1.png)
+
+![img.png](img.png)
+
+ 
 
 ## 系统要求
 
@@ -153,7 +152,3 @@ A: 可能是 Haiku API 调用失败。开启调试模式查看日志：`cat ~/.c
 **Q: 支持 Linux 吗？**
 
 A: notify.py 支持 Linux（通过 `notify-send`），但没有自定义图标功能。安装脚本目前仅支持 macOS。
-
-## License
-
-MIT

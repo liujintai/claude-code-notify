@@ -97,7 +97,7 @@ trap "rm -rf $WORK_DIR" EXIT
 mkdir -p "$INSTALL_DIR"
 
 # 判断是本地安装还是远程安装
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd 2>/dev/null || echo "")"
 if [[ -f "$SCRIPT_DIR/src/ClaudeNotify.swift" ]]; then
     # 本地安装（从 clone 的仓库）
     info "检测到本地源码，使用本地文件..."
@@ -174,8 +174,16 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.2.0</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSUserNotificationAlertStyle</key>
+    <string>banner</string>
 </dict>
 </plist>
 PLIST
@@ -185,6 +193,15 @@ cp "$WORK_DIR/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 # 签名
 codesign --force --sign - "$APP_DIR" 2>/dev/null
+
+# 注册到 Launch Services（让 macOS 识别此应用，出现在通知设置中）
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -f "$APP_DIR"
+    ok "已注册到系统 Launch Services"
+else
+    warn "未找到 lsregister，请手动打开一次 ClaudeNotify.app"
+fi
 
 ok "编译完成并已签名"
 
@@ -270,12 +287,14 @@ fi
 # ============================================================
 info "发送测试通知（首次运行需要授权通知权限）..."
 
-"$APP_DIR/Contents/MacOS/ClaudeNotify" \
+# 使用 open 命令启动 app（确保 macOS 正确关联 bundle identifier）
+open -n -W "$APP_DIR" --args \
     -title "Claude Code Notify" \
     -message "安装成功！通知功能已就绪。" &
 NOTIFY_PID=$!
 
-sleep 3
+# 等待足够时间让系统弹出权限请求对话框
+sleep 5
 kill $NOTIFY_PID 2>/dev/null || true
 
 # ============================================================

@@ -24,18 +24,20 @@ CONTENT_MAX_CHARS = 1500  # 发送给 Haiku 的最大字符数
 # ============================================================
 # 通知
 # ============================================================
-NOTIFY_APP = os.path.join(
+NOTIFY_APP_BUNDLE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "ClaudeNotify.app", "Contents", "MacOS", "ClaudeNotify",
+    "ClaudeNotify.app",
 )
 
 
 def send_notification(title: str, message: str):
     """发送 macOS / Linux 桌面通知"""
     message = message.replace("\n", " ")
-    if sys.platform == "darwin" and os.path.isfile(NOTIFY_APP):
+    if sys.platform == "darwin" and os.path.isdir(NOTIFY_APP_BUNDLE):
+        # 使用 open -n -W 启动 app，确保 macOS 正确关联 bundle identifier
         subprocess.run(
-            [NOTIFY_APP, "-title", title, "-message", message],
+            ["open", "-n", "-W", NOTIFY_APP_BUNDLE,
+             "--args", "-title", title, "-message", message],
             capture_output=True,
             timeout=10,
         )

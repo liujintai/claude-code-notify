@@ -88,19 +88,37 @@ def _extract_text_from_entry(data: dict) -> str:
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
-        texts = [
-            c.get("text", "")
-            for c in content
-            if c.get("type") == "text" and c.get("text", "").strip()
-        ]
+        texts = []
+        for c in content:
+            if c.get("type") == "text":
+                t = c.get("text")
+                if isinstance(t, str) and t.strip():
+                    texts.append(t)
         return "\n".join(texts)
     return ""
+
+
+def _parse_entries(lines: list[str]) -> list[dict]:
+    """将 JSONL 行解析为条目列表，跳过无效行"""
+    entries = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return entries
 
 
 def extract_conversation(hook_input: dict) -> tuple[str, str]:
     """
     从 transcript 文件中提取最后一轮对话。
     返回 (用户问题, AI回答)
+
+    策略：先找最后一条真实用户消息，再向后查找对应的 assistant 回复。
+    如果 assistant 回复尚未写入文件（竞态条件），会等待并重试。
     """
     transcript_path = hook_input.get("transcript_path", "")
     log(f"[提取] transcript_path={transcript_path}")
@@ -109,47 +127,59 @@ def extract_conversation(hook_input: dict) -> tuple[str, str]:
         log("[提取] 文件不存在")
         return "", ""
 
-    try:
-        with open(transcript_path, "r") as f:
-            lines = f.readlines()
-        log(f"[提取] 总行数={len(lines)}")
-    except Exception as e:
-        log(f"[提取] 读取文件异常: {e}")
-        return "", ""
+    max_retries = 5
+    retry_delay = 0.15  # 秒
 
-    # 从后往前扫描，收集最后一轮的 assistant 文本和 user 文本
-    assistant_text = ""
-    user_text = ""
-    found_assistant = False
-
-    for line in reversed(lines):
-        line = line.strip()
-        if not line:
-            continue
+    for attempt in range(max_retries):
         try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        entry_type = data.get("type", "")
-
-        # 先找到最后的 assistant 文本
-        if not found_assistant and entry_type == "assistant":
-            text = _extract_text_from_entry(data)
-            if text:
-                assistant_text = text
-                found_assistant = True
+            with open(transcript_path, "r") as f:
+                lines = f.readlines()
+            log(f"[提取] 总行数={len(lines)} (尝试 {attempt + 1}/{max_retries})")
+        except Exception as e:
+            log(f"[提取] 读取文件异常: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
                 continue
+            return "", ""
 
-        # 找到 assistant 后，继续往前找对应的 user 消息
-        if found_assistant and entry_type == "user":
-            text = _extract_text_from_entry(data)
-            if text:
-                user_text = text
-                break
+        entries = _parse_entries(lines)
 
-    log(f"[提取] user长度={len(user_text)}, assistant长度={len(assistant_text)}")
-    return user_text, assistant_text
+        # 1) 反向查找最后一条有文本的真实用户消息（跳过 tool_result）
+        last_user_idx = -1
+        user_text = ""
+        for i in range(len(entries) - 1, -1, -1):
+            if entries[i].get("type") == "user":
+                text = _extract_text_from_entry(entries[i])
+                if text:
+                    last_user_idx = i
+                    user_text = text
+                    break
+
+        if last_user_idx < 0:
+            log("[提取] 未找到用户消息")
+            return "", ""
+
+        # 2) 从该用户消息之后，正向查找 assistant 回复（取最后一条有文本的）
+        assistant_text = ""
+        for i in range(last_user_idx + 1, len(entries)):
+            if entries[i].get("type") == "assistant":
+                text = _extract_text_from_entry(entries[i])
+                if text:
+                    assistant_text = text
+
+        if assistant_text:
+            log(f"[提取] user长度={len(user_text)}, assistant长度={len(assistant_text)}")
+            return user_text, assistant_text
+
+        # 未找到 assistant 回复 → 文件可能尚未写入完成，等待后重试
+        log(f"[提取] 找到用户消息但未找到助手回复，等待重试 (尝试 {attempt + 1}/{max_retries})")
+        if attempt < max_retries - 1:
+            time.sleep(retry_delay)
+
+    # 所有重试都失败，返回用户消息但助手回复为空
+    # （不回退到反向扫描，避免错误匹配到上一轮对话）
+    log(f"[提取] 重试耗尽，未找到助手回复 user长度={len(user_text)}")
+    return user_text, ""
 
 
 # ============================================================
